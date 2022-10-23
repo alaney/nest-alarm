@@ -18,6 +18,7 @@ namespace nestalarm
             var projectId = config["PROJECT_ID"];
             var oauthClientId = config["OAUTH2_CLIENT_ID"];
             var oauthClientSecret = config["OAUTH2_CLIENT_SECRET"];
+            var subscriptionId = config["SUBSCRIPTION_ID"];
 
             if (String.IsNullOrEmpty(accessToken) || String.IsNullOrEmpty(refreshToken) || String.IsNullOrEmpty(projectId)) {
                 throw new ApplicationException("Must provde a access token and refresh token");
@@ -26,13 +27,25 @@ namespace nestalarm
             DeviceAccess deviceAccess = new DeviceAccess(accessToken, refreshToken, projectId, oauthClientSecret, oauthClientId);
             await deviceAccess.Authenticate();
 
-
-            // Check Events on loop
+            await CheckEvents(deviceAccess, projectId, subscriptionId);
         }
 
-        private static async Task CheckEvents()
+        private static async Task CheckEvents(DeviceAccess deviceAccess, string projectId, string subscriptionId)
         {
-            throw new NotImplementedException();
+            while(true) 
+            {
+                TimeSpan start = new TimeSpan(20, 0, 0);
+                TimeSpan midnight = new TimeSpan(24, 0, 0);
+                TimeSpan midnight2 = new TimeSpan(0, 0, 0);
+                TimeSpan end = new TimeSpan(5, 45, 0);
+                TimeSpan now = DateTime.Now.TimeOfDay;
+
+                if(((now >= start) && (now < midnight)) || (now >= midnight2 && now <= end))
+                {
+                    await deviceAccess.PullMessagesAsync(projectId, subscriptionId, true);
+                    await Task.Delay(5000);
+                }
+            }
         }
 
         private static void MakeCall(IConfigurationRoot config)
