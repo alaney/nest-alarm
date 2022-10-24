@@ -24,7 +24,8 @@ namespace nestalarm
             string twilioAuthToken = config["TWILIO_AUTH_TOKEN"];
             string[] phones = config.GetSection("Phones").GetChildren().Select(x => x.Value).ToArray();
 
-            if (String.IsNullOrEmpty(accessToken) || String.IsNullOrEmpty(refreshToken) || String.IsNullOrEmpty(deviceAccessProjectId)) {
+            if (String.IsNullOrEmpty(accessToken) || String.IsNullOrEmpty(refreshToken) || String.IsNullOrEmpty(deviceAccessProjectId))
+            {
                 throw new ApplicationException("Must provde a access token and refresh token");
             }
 
@@ -37,7 +38,7 @@ namespace nestalarm
 
         private static async Task CheckEvents(DeviceAccess deviceAccess, string projectId, string subscriptionId)
         {
-            while(true) 
+            while (true)
             {
                 TimeSpan start = new TimeSpan(20, 0, 0);
                 TimeSpan midnight = new TimeSpan(24, 0, 0);
@@ -47,30 +48,59 @@ namespace nestalarm
 
                 // if(((now >= start) && (now < midnight)) || (now >= midnight2 && now <= end))
                 // {
-                    bool personEvent = await deviceAccess.CheckForPersonEventAsync(projectId, subscriptionId, true);
-                    if (personEvent) 
-                    {
-                        break;
-                    }
-                    await Task.Delay(5000);
+                bool personEvent = await deviceAccess.CheckForPersonEventAsync(projectId, subscriptionId, true);
+                if (personEvent)
+                {
+                    break;
+                }
+                await Task.Delay(5000);
                 // }
             }
         }
 
         private static async Task CallPeople(string[] phones, string twilioAccountSid, string twilioAuthToken)
         {
+            bool callAnswered = false;
             TwilioClient.Init(twilioAccountSid, twilioAuthToken);
             for (int i = 0; i < phones.Length; i++)
             {
-                string phone = phones[i];
-                string callSid = MakeCall(phone);
-                while (true) 
+                // Call each number twice to bypass "do not disturb" mode.
+                for (int j = 0; j < 2; j++)
                 {
-                    CallResource call = CallResource.Fetch(callSid);
-                    Console.WriteLine(call.AnsweredBy);
-                    await Task.Delay(5000);
+                    string phone = phones[i];
+                    string callSid = MakeCall(phone);
+                    while (true)
+                    {
+                        CallResource call = CallResource.Fetch(callSid);
+                        Console.WriteLine(call.AnsweredBy);
+                        bool callCompleted = call.Status == CallResource.StatusEnum.Completed;
+                        bool answeredByHuman = call.AnsweredBy == "human";
+                        if (answeredByHuman && callCompleted)
+                        {
+                            callAnswered = true;
+                            break;
+                        } 
+                        else if (callCompleted) 
+                        {
+                            break;
+                        }
+                        await Task.Delay(1000);
+                    }
+
+                    if (callAnswered) {
+                        break;
+                    }
                 }
 
+                if (callAnswered) 
+                {
+                    break;
+                }
+            }
+
+            if (!callAnswered)
+            {
+                // do something? Send a text or log somethingn.
             }
         }
 
