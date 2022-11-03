@@ -7,7 +7,6 @@ namespace nestalarm
   internal class Program
   {
     private static bool checking = true;
-    private static string twilioNumber = "+13609681398";
     private static async Task Main(string[] args)
     {
       var configuration = new ConfigurationBuilder()
@@ -22,14 +21,10 @@ namespace nestalarm
       var oauthClientId = config["OAUTH2_CLIENT_ID"];
       var oauthClientSecret = config["OAUTH2_CLIENT_SECRET"];
       var subscriptionId = config["SUBSCRIPTION_ID"];
-      var twilioAccountSid = config["TWILIO_ACCOUNT_SID"];
+      string twilioAccountSid = config["TWILIO_ACCOUNT_SID"];
       string twilioAuthToken = config["TWILIO_AUTH_TOKEN"];
+      string twilioNumber = config["TWILIO_NUMBER"];
       string[] phones = config.GetSection("Phones").GetChildren().Select(x => x.Value).ToArray();
-
-      if (String.IsNullOrEmpty(accessToken) || String.IsNullOrEmpty(refreshToken) || String.IsNullOrEmpty(deviceAccessProjectId))
-      {
-        throw new ApplicationException("Must provde a access token and refresh token");
-      }
 
       DeviceAccess deviceAccess = new DeviceAccess(accessToken, refreshToken, deviceAccessProjectId, oauthClientSecret, oauthClientId);
       await deviceAccess.Authenticate();
@@ -38,18 +33,30 @@ namespace nestalarm
       string answeredPhone = "";
       while (true)
       {
+        TimeSpan start = new TimeSpan(0, 0, 0);
+        TimeSpan midnight = new TimeSpan(24, 0, 0);
+        TimeSpan midnight2 = new TimeSpan(0, 0, 0);
+        TimeSpan end = new TimeSpan(24, 0, 0);
+        TimeSpan now = DateTime.Now.TimeOfDay;
+
+        if (((now >= start) && (now < midnight)) || (now >= midnight2 && now <= end))
+        {
+          checking = true;
+        }
+
         if (checking)
         {
-          await CheckEvents(deviceAccess, projectId, subscriptionId);
-          answeredPhone = await CallPhones(phones, twilioAccountSid, twilioAuthToken);
+          await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
+          answeredPhone = await CallPhones(phones, twilioAccountSid, twilioAuthToken, twilioNumber);
           if (answeredPhone != "")
           {
             checking = false;
-            messageSid = SendText(answeredPhone);
+            messageSid = SendText(answeredPhone, twilioNumber);
           }
         }
         else
         {
+          await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
           CheckTextResponse(messageSid);
           await Task.Delay(60 * 1000);
         }
@@ -62,42 +69,33 @@ namespace nestalarm
       Console.WriteLine(messages);
     }
 
-    private static string SendText(string phone)
+    private static string SendText(string toPhone, string fromPhone)
     {
       var message = MessageResource.Create(
           body: "Join Earth's mightiest heroes. Like Kevin Bacon.",
-          from: new Twilio.Types.PhoneNumber(twilioNumber),
-          to: new Twilio.Types.PhoneNumber(phone)
+          from: new Twilio.Types.PhoneNumber(fromPhone),
+          to: new Twilio.Types.PhoneNumber(toPhone)
       );
 
       return message.Sid;
     }
 
-    private static async Task CheckEvents(DeviceAccess deviceAccess, string projectId, string subscriptionId)
+    private static async Task WaitForPersonEvent(DeviceAccess deviceAccess, string projectId, string subscriptionId)
     {
       while (true)
       {
-        TimeSpan start = new TimeSpan(0, 0, 0);
-        TimeSpan midnight = new TimeSpan(24, 0, 0);
-        TimeSpan midnight2 = new TimeSpan(0, 0, 0);
-        TimeSpan end = new TimeSpan(24, 0, 0);
-        TimeSpan now = DateTime.Now.TimeOfDay;
-
-        if (((now >= start) && (now < midnight)) || (now >= midnight2 && now <= end))
+        bool personEvent = await deviceAccess.CheckForPersonEventAsync(projectId, subscriptionId, true);
+        if (personEvent)
         {
-          bool personEvent = await deviceAccess.CheckForPersonEventAsync(projectId, subscriptionId, true);
-          if (personEvent)
-          {
-            break;
-          }
-          await Task.Delay(5000);
+          break;
         }
+        await Task.Delay(5000);
       }
     }
 
     // Calls a list of phone numbers in order and returns the phone number that a human answered, if a human answers.
     // otherwise returns an empty string.
-    private static async Task<string> CallPhones(string[] phones, string twilioAccountSid, string twilioAuthToken)
+    private static async Task<string> CallPhones(string[] phones, string twilioAccountSid, string twilioAuthToken, string twilioNumber)
     {
       TwilioClient.Init(twilioAccountSid, twilioAuthToken);
       for (int i = 0; i < phones.Length; i++)
@@ -106,7 +104,7 @@ namespace nestalarm
         // Call each number twice to bypass "do not disturb" mode.
         for (int j = 0; j < 2; j++)
         {
-          string callSid = MakeCall(phone);
+          string callSid = MakeCall(phone, twilioNumber);
           while (true)
           {
             CallResource call = CallResource.Fetch(callSid);
@@ -128,12 +126,12 @@ namespace nestalarm
       return "";
     }
 
-    private static string MakeCall(string phone)
+    private static string MakeCall(string toPhone, string fromPhone)
     {
       var call = CallResource.Create(
           url: new Uri("http://demo.twilio.com/docs/voice.xml"),
-          to: new Twilio.Types.PhoneNumber(phone),
-          from: new Twilio.Types.PhoneNumber(twilioNumber),
+          to: new Twilio.Types.PhoneNumber(toPhone),
+          from: new Twilio.Types.PhoneNumber(fromPhone),
           machineDetection: "Enable"
       );
       return call.Sid;
