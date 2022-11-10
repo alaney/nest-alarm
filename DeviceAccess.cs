@@ -28,12 +28,11 @@ namespace nestalarm
     {
       try
       {
-        await GetCameras();
+        await MakeDevicesRequest();
       }
       catch (HttpRequestException ex)
       {
         await RefreshAccessToken();
-        var cameras = await GetCameras();
         Console.WriteLine("\nException Caught!");
         Console.WriteLine("Message :{0} ", ex.Message);
       }
@@ -89,7 +88,7 @@ namespace nestalarm
       return personEventCount > 0;
     }
 
-    private async Task<List<Camera>> GetCameras()
+    private async Task MakeDevicesRequest()
     {
       client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
       client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -97,35 +96,25 @@ namespace nestalarm
       using (HttpResponseMessage response = await client.GetAsync(devicesUri))
       {
         response.EnsureSuccessStatusCode();
-        string responseBody = await response.Content.ReadAsStringAsync();
-        DevicesResponse devicesResp = JsonConvert.DeserializeObject<DevicesResponse>(responseBody);
-
-        if (devicesResp != null && devicesResp.devices != null)
-        {
-          var devices = devicesResp.devices;
-          var cameraDevices = devices.FindAll(c => c.type.Contains("CAMERA"));
-          var cameras = cameraDevices.Select(c =>
-          {
-            string id = ParseDeviceIdFromName(c.name);
-            return new Camera(id);
-          }).ToList();
-
-          return cameras;
-        }
-
-        throw new ApplicationException("The devices response was malformed");
       }
     }
 
-    private async Task TurnOffCamera()
+    private async Task<HttpResponseMessage> SendPostRequest(string uri, string content, string contentType, string token)
     {
-
-    }
-
-    private string ParseDeviceIdFromName(string name)
-    {
-      string[] parts = name.Split('/');
-      return parts[3];
+      HttpResponseMessage response;
+      using (var client = new HttpClient())
+      {
+        using (var request = new HttpRequestMessage(HttpMethod.Post, uri))
+        {
+          if (token != null)
+          {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+          }
+          request.Content = new StringContent(content, System.Text.Encoding.UTF8, contentType);
+          response = await client.SendAsync(request);
+        }
+      }
+      return response;
     }
   }
 }
