@@ -34,40 +34,39 @@ namespace nestalarm
       GoogleHomeFoyer homeFoyer = new GoogleHomeFoyer(homeFoyerAuthorization, homeFoyerCookie, homeFoyerApiKey, homFoyerCameras);
       DeviceAccess deviceAccess = new DeviceAccess(accessToken, refreshToken, deviceAccessProjectId, oauthClientSecret, oauthClientId);
       await deviceAccess.Authenticate();
-      await homeFoyer.TurnOnAllCameras();
 
-      // string messageSid = "";
-      // string answeredPhone = "";
-      // while (true)
-      // {
-      //   TimeSpan start = new TimeSpan(0, 0, 0);
-      //   TimeSpan midnight = new TimeSpan(24, 0, 0);
-      //   TimeSpan midnight2 = new TimeSpan(0, 0, 0);
-      //   TimeSpan end = new TimeSpan(24, 0, 0);
-      //   TimeSpan now = DateTime.Now.TimeOfDay;
+      string messageSid = "";
+      string answeredPhone = "";
+      while (true)
+      {
+        TimeSpan start = new TimeSpan(0, 0, 0);
+        TimeSpan midnight = new TimeSpan(24, 0, 0);
+        TimeSpan midnight2 = new TimeSpan(0, 0, 0);
+        TimeSpan end = new TimeSpan(24, 0, 0);
+        TimeSpan now = DateTime.Now.TimeOfDay;
 
-      //   if (((now >= start) && (now < midnight)) || (now >= midnight2 && now <= end))
-      //   {
-      //     checking = true;
-      //   }
+        if (((now >= start) && (now < midnight)) || (now >= midnight2 && now <= end))
+        {
+          checking = true;
+        }
 
-      //   if (checking)
-      //   {
-      //     await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
-      //     answeredPhone = await CallPhones(phones, twilioAccountSid, twilioAuthToken, twilioNumber);
-      //     if (answeredPhone != "")
-      //     {
-      //       checking = false;
-      //       messageSid = SendText(answeredPhone, twilioNumber);
-      //     }
-      //   }
-      //   else
-      //   {
-      //     await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
-      //     CheckTextResponse(messageSid);
-      //     await Task.Delay(60 * 1000);
-      //   }
-      // }
+        if (checking)
+        {
+          await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
+          answeredPhone = await CallPhones(phones, twilioAccountSid, twilioAuthToken, twilioNumber);
+          if (answeredPhone != "")
+          {
+            checking = false;
+            messageSid = SendText(answeredPhone, twilioNumber);
+          }
+        }
+        else
+        {
+          await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
+          CheckTextResponse(messageSid);
+          await Task.Delay(60 * 1000);
+        }
+      }
     }
 
     private static void CheckTextResponse(string messageSid)
