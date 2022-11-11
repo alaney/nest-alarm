@@ -10,11 +10,11 @@ namespace nestalarm
     private readonly string googleApiKey;
     private readonly List<Camera> cameras;
 
-    public GoogleHomeFoyer(string authorization, string cookie, string googleApiKey, List<Camera> cameras)
+    public GoogleHomeFoyer(HomeFoyerHeaderOptions options, List<Camera> cameras)
     {
-      this.authorization = authorization;
-      this.cookie = cookie;
-      this.googleApiKey = googleApiKey;
+      this.authorization = options.Authorization;
+      this.cookie = options.Cookie;
+      this.googleApiKey = options.XGoogleApiKey;
       this.cameras = cameras;
     }
 

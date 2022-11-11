@@ -14,25 +14,11 @@ namespace nestalarm
           .AddJsonFile($"appsettings.json");
 
       var config = configuration.Build();
-      string accessToken = config["ACCESS_TOKEN"];
-      string refreshToken = config["REFRESH_TOKEN"];
-      string deviceAccessProjectId = config["DEVICE_ACCESS_PROJECT_ID"];
-      string projectId = config["PROJECT_ID"];
-      string oauthClientId = config["OAUTH2_CLIENT_ID"];
-      string oauthClientSecret = config["OAUTH2_CLIENT_SECRET"];
-      string subscriptionId = config["SUBSCRIPTION_ID"];
-      string twilioAccountSid = config["TWILIO_ACCOUNT_SID"];
-      string twilioAuthToken = config["TWILIO_AUTH_TOKEN"];
-      string twilioNumber = config["TWILIO_NUMBER"];
-      string[] phones = config.GetSection("Phones").GetChildren().Select(x => x.Value).ToArray();
-      var homeFoyerSection = config.GetSection("HOME_FOYER_REQUEST_HEADERS");
-      string homeFoyerAuthorization = homeFoyerSection["authorization"];
-      string homeFoyerCookie = homeFoyerSection["cookie"];
-      string homeFoyerApiKey = homeFoyerSection["x-google-api-key"];
-      var homFoyerCameras = config.GetSection("HOME_FOYER_CAMERAS").Get<List<Camera>>();
+      var appOptions = new AppOptions();
+      config.Bind(appOptions);
 
-      GoogleHomeFoyer homeFoyer = new GoogleHomeFoyer(homeFoyerAuthorization, homeFoyerCookie, homeFoyerApiKey, homFoyerCameras);
-      DeviceAccess deviceAccess = new DeviceAccess(accessToken, refreshToken, deviceAccessProjectId, oauthClientSecret, oauthClientId);
+      GoogleHomeFoyer homeFoyer = new GoogleHomeFoyer(appOptions.HomeFoyerRequestHeaders, appOptions.HomeFoyerCameras);
+      DeviceAccess deviceAccess = new DeviceAccess(appOptions.DeviceAccess);
       await deviceAccess.Authenticate();
 
       string messageSid = "";
@@ -52,17 +38,17 @@ namespace nestalarm
 
         if (checking)
         {
-          await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
-          answeredPhone = await CallPhones(phones, twilioAccountSid, twilioAuthToken, twilioNumber);
+          await WaitForPersonEvent(deviceAccess);
+          answeredPhone = await CallPhones(appOptions.Phones, appOptions.Twilio);
           if (answeredPhone != "")
           {
             checking = false;
-            messageSid = SendText(answeredPhone, twilioNumber);
+            messageSid = SendText(answeredPhone, appOptions.Twilio.Number);
           }
         }
         else
         {
-          await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
+          await WaitForPersonEvent(deviceAccess);
           CheckTextResponse(messageSid);
           await Task.Delay(60 * 1000);
         }
@@ -86,11 +72,11 @@ namespace nestalarm
       return message.Sid;
     }
 
-    private static async Task WaitForPersonEvent(DeviceAccess deviceAccess, string projectId, string subscriptionId)
+    private static async Task WaitForPersonEvent(DeviceAccess deviceAccess)
     {
       while (true)
       {
-        bool personEvent = await deviceAccess.CheckForPersonEventAsync(projectId, subscriptionId, true);
+        bool personEvent = await deviceAccess.CheckForPersonEventAsync(true);
         if (personEvent)
         {
           break;
@@ -101,16 +87,16 @@ namespace nestalarm
 
     // Calls a list of phone numbers in order and returns the phone number that a human answered, if a human answers.
     // otherwise returns an empty string.
-    private static async Task<string> CallPhones(string[] phones, string twilioAccountSid, string twilioAuthToken, string twilioNumber)
+    private static async Task<string> CallPhones(string[] phones, TwilioOptions twilioOptions)
     {
-      TwilioClient.Init(twilioAccountSid, twilioAuthToken);
+      TwilioClient.Init(twilioOptions.AccountSid, twilioOptions.AuthToken);
       for (int i = 0; i < phones.Length; i++)
       {
         string phone = phones[i];
         // Call each number twice to bypass "do not disturb" mode.
         for (int j = 0; j < 2; j++)
         {
-          string callSid = MakeCall(phone, twilioNumber);
+          string callSid = MakeCall(phone, twilioOptions.Number);
           while (true)
           {
             CallResource call = CallResource.Fetch(callSid);

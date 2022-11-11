@@ -9,18 +9,20 @@ namespace nestalarm
   {
     private string projectId;
     private string accessToken;
+    private string subscriptionId;
     private string refreshToken;
     private string oauthClientSecret;
     private string oauthClientId;
     private HttpClient client;
 
-    public DeviceAccess(string accessToken, string refreshToken, string projectId, string oauthClientSecret, string oauthClientId)
+    public DeviceAccess(DeviceAccessOptions options)
     {
-      this.accessToken = accessToken;
-      this.refreshToken = refreshToken;
-      this.projectId = projectId;
-      this.oauthClientId = oauthClientId;
-      this.oauthClientSecret = oauthClientSecret;
+      this.accessToken = options.AccessToken;
+      this.refreshToken = options.RefreshToken;
+      this.projectId = options.ProjectId;
+      this.oauthClientId = options.OAuthClientId;
+      this.oauthClientSecret = options.OAuthClientSecret;
+      this.subscriptionId = options.SubscriptionId;
       this.client = new HttpClient();
     }
 
@@ -64,7 +66,7 @@ namespace nestalarm
     }
 
 
-    public async Task<bool> CheckForPersonEventAsync(string projectId, string subscriptionId, bool acknowledge)
+    public async Task<bool> CheckForPersonEventAsync(bool acknowledge)
     {
       SubscriptionName subscriptionName = SubscriptionName.FromProjectSubscription(projectId, subscriptionId);
       SubscriberClient subscriber = await SubscriberClient.CreateAsync(subscriptionName);
