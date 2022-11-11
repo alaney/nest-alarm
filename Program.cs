@@ -14,53 +14,60 @@ namespace nestalarm
           .AddJsonFile($"appsettings.json");
 
       var config = configuration.Build();
-      var accessToken = config["ACCESS_TOKEN"];
-      var refreshToken = config["REFRESH_TOKEN"];
-      var deviceAccessProjectId = config["DEVICE_ACCESS_PROJECT_ID"];
-      var projectId = config["PROJECT_ID"];
-      var oauthClientId = config["OAUTH2_CLIENT_ID"];
-      var oauthClientSecret = config["OAUTH2_CLIENT_SECRET"];
-      var subscriptionId = config["SUBSCRIPTION_ID"];
+      string accessToken = config["ACCESS_TOKEN"];
+      string refreshToken = config["REFRESH_TOKEN"];
+      string deviceAccessProjectId = config["DEVICE_ACCESS_PROJECT_ID"];
+      string projectId = config["PROJECT_ID"];
+      string oauthClientId = config["OAUTH2_CLIENT_ID"];
+      string oauthClientSecret = config["OAUTH2_CLIENT_SECRET"];
+      string subscriptionId = config["SUBSCRIPTION_ID"];
       string twilioAccountSid = config["TWILIO_ACCOUNT_SID"];
       string twilioAuthToken = config["TWILIO_AUTH_TOKEN"];
       string twilioNumber = config["TWILIO_NUMBER"];
       string[] phones = config.GetSection("Phones").GetChildren().Select(x => x.Value).ToArray();
+      var homeFoyerSection = config.GetSection("HOME_FOYER_REQUEST_HEADERS");
+      string homeFoyerAuthorization = homeFoyerSection["authorization"];
+      string homeFoyerCookie = homeFoyerSection["cookie"];
+      string homeFoyerApiKey = homeFoyerSection["x-google-api-key"];
+      var homFoyerCameras = config.GetSection("HOME_FOYER_CAMERAS").Get<List<Camera>>();
 
+      GoogleHomeFoyer homeFoyer = new GoogleHomeFoyer(homeFoyerAuthorization, homeFoyerCookie, homeFoyerApiKey, homFoyerCameras);
       DeviceAccess deviceAccess = new DeviceAccess(accessToken, refreshToken, deviceAccessProjectId, oauthClientSecret, oauthClientId);
       await deviceAccess.Authenticate();
+      await homeFoyer.TurnOnAllCameras();
 
-      string messageSid = "";
-      string answeredPhone = "";
-      while (true)
-      {
-        TimeSpan start = new TimeSpan(0, 0, 0);
-        TimeSpan midnight = new TimeSpan(24, 0, 0);
-        TimeSpan midnight2 = new TimeSpan(0, 0, 0);
-        TimeSpan end = new TimeSpan(24, 0, 0);
-        TimeSpan now = DateTime.Now.TimeOfDay;
+      // string messageSid = "";
+      // string answeredPhone = "";
+      // while (true)
+      // {
+      //   TimeSpan start = new TimeSpan(0, 0, 0);
+      //   TimeSpan midnight = new TimeSpan(24, 0, 0);
+      //   TimeSpan midnight2 = new TimeSpan(0, 0, 0);
+      //   TimeSpan end = new TimeSpan(24, 0, 0);
+      //   TimeSpan now = DateTime.Now.TimeOfDay;
 
-        if (((now >= start) && (now < midnight)) || (now >= midnight2 && now <= end))
-        {
-          checking = true;
-        }
+      //   if (((now >= start) && (now < midnight)) || (now >= midnight2 && now <= end))
+      //   {
+      //     checking = true;
+      //   }
 
-        if (checking)
-        {
-          await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
-          answeredPhone = await CallPhones(phones, twilioAccountSid, twilioAuthToken, twilioNumber);
-          if (answeredPhone != "")
-          {
-            checking = false;
-            messageSid = SendText(answeredPhone, twilioNumber);
-          }
-        }
-        else
-        {
-          await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
-          CheckTextResponse(messageSid);
-          await Task.Delay(60 * 1000);
-        }
-      }
+      //   if (checking)
+      //   {
+      //     await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
+      //     answeredPhone = await CallPhones(phones, twilioAccountSid, twilioAuthToken, twilioNumber);
+      //     if (answeredPhone != "")
+      //     {
+      //       checking = false;
+      //       messageSid = SendText(answeredPhone, twilioNumber);
+      //     }
+      //   }
+      //   else
+      //   {
+      //     await WaitForPersonEvent(deviceAccess, projectId, subscriptionId);
+      //     CheckTextResponse(messageSid);
+      //     await Task.Delay(60 * 1000);
+      //   }
+      // }
     }
 
     private static void CheckTextResponse(string messageSid)

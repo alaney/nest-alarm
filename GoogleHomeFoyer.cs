@@ -1,3 +1,5 @@
+using System.Net.Http.Headers;
+
 namespace nestalarm
 {
   public class GoogleHomeFoyer
@@ -6,9 +8,9 @@ namespace nestalarm
     private readonly string cookie;
     private readonly string authorization;
     private readonly string googleApiKey;
-    private readonly Camera[] cameras;
+    private readonly List<Camera> cameras;
 
-    public GoogleHomeFoyer(string authorization, string cookie, string googleApiKey, Camera[] cameras)
+    public GoogleHomeFoyer(string authorization, string cookie, string googleApiKey, List<Camera> cameras)
     {
       this.authorization = authorization;
       this.cookie = cookie;
@@ -18,7 +20,7 @@ namespace nestalarm
 
     public async Task TurnOnAllCameras()
     {
-      for (int i = 0; i < cameras.Length; i++)
+      for (int i = 0; i < cameras.Count; i++)
       {
         Camera cam = cameras[i];
         await TurnOnCamera(cam);
@@ -27,7 +29,7 @@ namespace nestalarm
 
     public async Task TurnOffAllCameras()
     {
-      for (int i = 0; i < cameras.Length; i++)
+      for (int i = 0; i < cameras.Count; i++)
       {
         Camera cam = cameras[i];
         await TurnOffCamera(cam);
@@ -53,15 +55,18 @@ namespace nestalarm
       {
         using (var request = new HttpRequestMessage(HttpMethod.Post, api))
         {
-          request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(authorization);
-          request.Headers.Add("content-type", "application/json+protobuf");
+          request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json+protobuf"));
+          request.Headers.Add("authorization", authorization);
+          // request.Headers.Authorization = new AuthenticationHeaderValue(authorization);
+          // request.Headers.Add("content-type", "application/json+protobuf");
           request.Headers.Add("origin", "https://home.google.com");
           request.Headers.Add("cookie", cookie);
           request.Headers.Add("x-goog-api-key", googleApiKey);
-          request.Content = new StringContent(content, System.Text.Encoding.UTF8, "application/json");
+          request.Content = new StringContent(content, System.Text.Encoding.UTF8, "application/json+protobuf");
           response = await client.SendAsync(request);
         }
       }
+      Console.WriteLine(response.StatusCode);
       return response;
     }
   }
