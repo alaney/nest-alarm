@@ -6,6 +6,7 @@ namespace nestalarm
 {
   internal class Program
   {
+    private static readonly NLog.Logger Logger = NLog.LogManager.GetCurrentClassLogger();
     private static State state = new State();
     private static async Task Main(string[] args)
     {
@@ -22,7 +23,6 @@ namespace nestalarm
       await deviceAccess.Authenticate();
       // Clear any events
       await deviceAccess.CheckForPersonEventAsync(true);
-
 
       TimeSpan start = new TimeSpan(10, 0, 0);
       TimeSpan end = new TimeSpan(9, 59, 59);
@@ -44,6 +44,7 @@ namespace nestalarm
 
             if (personEvent)
             {
+              Logger.Info("Person event occurred");
               state.AnsweredPhoneNumber = await CallPhones(appOptions.Phones, appOptions.Twilio);
               if (state.PhoneAnswered)
               {
@@ -93,12 +94,13 @@ namespace nestalarm
       return ((now >= start) && (now <= midnight)) || ((now >= midnight2) && (now <= end));
     }
 
-    private static void ShouldRestart(string messageSid)
+    private static async Task ShouldRestart(string messageSid)
     {
       var messages = MessageResource.Read(limit: 20);
       // find message by SID.
       // and see if there's one right after it with test "RESTART"
       Console.WriteLine(messages);
+      await Task.Delay(5000);
     }
 
     private static string SendText(string toPhone, string fromPhone)
@@ -124,11 +126,14 @@ namespace nestalarm
         for (int j = 0; j < 2; j++)
         {
           string callSid = MakeCall(phone, twilioOptions.Number);
+          Logger.Info("Call made to " + phone);
           while (true)
           {
             CallResource call = CallResource.Fetch(callSid);
             bool callCompleted = call.Status == CallResource.StatusEnum.Completed;
+            Logger.Info("Call completed: " + callCompleted);
             bool answeredByHuman = call.AnsweredBy == "human";
+            Logger.Info("Call answered: " + answeredByHuman);
             if (answeredByHuman)
             {
               return phone;
@@ -137,7 +142,7 @@ namespace nestalarm
             {
               break;
             }
-            await Task.Delay(1000);
+            await Task.Delay(2000);
           }
         }
       }
