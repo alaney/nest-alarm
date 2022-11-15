@@ -6,7 +6,7 @@ namespace nestalarm
 {
   internal class Program
   {
-    private static bool checking = true;
+    private static State state = new State();
     private static async Task Main(string[] args)
     {
       var configuration = new ConfigurationBuilder()
@@ -20,69 +20,96 @@ namespace nestalarm
       GoogleHomeFoyer homeFoyer = new GoogleHomeFoyer(appOptions.HomeFoyerRequestHeaders, appOptions.HomeFoyerCameras);
       DeviceAccess deviceAccess = new DeviceAccess(appOptions.DeviceAccess);
       await deviceAccess.Authenticate();
+      // Clear any events
+      await deviceAccess.CheckForPersonEventAsync(true);
 
-      string messageSid = "";
-      string answeredPhone = "";
+
+      TimeSpan start = new TimeSpan(10, 0, 0);
+      TimeSpan end = new TimeSpan(9, 59, 59);
       while (true)
       {
-        TimeSpan start = new TimeSpan(0, 0, 0);
-        TimeSpan midnight = new TimeSpan(24, 0, 0);
-        TimeSpan midnight2 = new TimeSpan(0, 0, 0);
-        TimeSpan end = new TimeSpan(24, 0, 0);
-        TimeSpan now = DateTime.Now.TimeOfDay;
-
-        if (((now >= start) && (now < midnight)) || (now >= midnight2 && now <= end))
+        // and the phone has not been answered
+        if (WithinTimeRange(start, end))
         {
-          checking = true;
-        }
+          await TurnCamerasOn(homeFoyer);
 
-        if (checking)
-        {
-          await WaitForPersonEvent(deviceAccess);
-          answeredPhone = await CallPhones(appOptions.Phones, appOptions.Twilio);
-          if (answeredPhone != "")
+          // an event occurred and someone answered the phone
+          if (state.PhoneAnswered && state.MessageSid != "")
           {
-            checking = false;
-            messageSid = SendText(answeredPhone, appOptions.Twilio.Number);
+            ShouldRestart(state.MessageSid);
+          }
+          else
+          {
+            bool personEvent = await deviceAccess.CheckForPersonEventAsync(true);
+
+            if (personEvent)
+            {
+              state.AnsweredPhoneNumber = await CallPhones(appOptions.Phones, appOptions.Twilio);
+              if (state.PhoneAnswered)
+              {
+                state.MessageSid = SendText(state.AnsweredPhoneNumber, appOptions.Twilio.Number);
+              }
+
+              // what if no one answered?
+              // call again?
+              // or nothing?
+            }
           }
         }
         else
         {
-          await WaitForPersonEvent(deviceAccess);
-          CheckTextResponse(messageSid);
-          await Task.Delay(60 * 1000);
+          await TurnCamerasOff(homeFoyer);
+          // continue to ack events so they don't pile up
+          bool personEvent = await deviceAccess.CheckForPersonEventAsync(true);
         }
       }
     }
 
-    private static void CheckTextResponse(string messageSid)
+    private static async Task TurnCamerasOn(GoogleHomeFoyer homeFoyer)
+    {
+      if (!state.CamerasOn)
+      {
+        await homeFoyer.TurnOnAllCameras();
+        state.CamerasOn = true;
+      }
+    }
+
+    private static async Task TurnCamerasOff(GoogleHomeFoyer homeFoyer)
+    {
+      if (state.CamerasOn)
+      {
+        await homeFoyer.TurnOffAllCameras();
+        state.CamerasOn = false;
+      }
+    }
+
+    private static bool WithinTimeRange(TimeSpan start, TimeSpan end)
+    {
+      TimeSpan midnight = new TimeSpan(24, 0, 0);
+      TimeSpan midnight2 = new TimeSpan(0, 0, 0);
+
+      TimeSpan now = DateTime.Now.TimeOfDay;
+
+      return ((now >= start) && (now <= midnight)) || ((now >= midnight2) && (now <= end));
+    }
+
+    private static void ShouldRestart(string messageSid)
     {
       var messages = MessageResource.Read(limit: 20);
+      // find message by SID.
+      // and see if there's one right after it with test "RESTART"
       Console.WriteLine(messages);
     }
 
     private static string SendText(string toPhone, string fromPhone)
     {
       var message = MessageResource.Create(
-          body: "Join Earth's mightiest heroes. Like Kevin Bacon.",
+          body: "The Nest Alarm system is paused. To restart, reply RESTART.",
           from: new Twilio.Types.PhoneNumber(fromPhone),
           to: new Twilio.Types.PhoneNumber(toPhone)
       );
 
       return message.Sid;
-    }
-
-    private static async Task WaitForPersonEvent(DeviceAccess deviceAccess)
-    {
-      while (true)
-      {
-        bool personEvent = await deviceAccess.CheckForPersonEventAsync(true);
-        if (personEvent)
-        {
-          break;
-        }
-        await Task.Delay(5000);
-      }
     }
 
     // Calls a list of phone numbers in order and returns the phone number that a human answered, if a human answers.
