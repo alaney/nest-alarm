@@ -26,6 +26,9 @@ namespace nestalarm
 
       TimeSpan start = new TimeSpan(10, 0, 0);
       TimeSpan end = new TimeSpan(9, 59, 59);
+      TimeSpan fiveMinutes = new TimeSpan(0, 5, 0);
+      TimeSpan fifteenMinutes = new TimeSpan(0, 15, 0);
+
       while (true)
       {
         // and the phone has not been answered
@@ -34,34 +37,37 @@ namespace nestalarm
           await TurnCamerasOn(homeFoyer);
 
           // an event occurred and someone answered the phone
-          if (state.PhoneAnswered && state.MessageSid != "")
+          if (state.PhoneAnswered && state.SmsMessageSent)
           {
-            ShouldRestart(state.MessageSid);
+            if (ShouldRestart())
+            {
+              state.Reset();
+            }
+            await Task.Delay(fiveMinutes);
           }
           else
           {
-            bool personEvent = await deviceAccess.CheckForPersonEventAsync(true);
-
-            if (personEvent)
+            if (await deviceAccess.CheckForPersonEventAsync(true))
             {
               Logger.Info("Person event occurred");
               state.AnsweredPhoneNumber = await CallPhones(appOptions.Phones, appOptions.Twilio);
+
               if (state.PhoneAnswered)
               {
-                state.MessageSid = SendText(state.AnsweredPhoneNumber, appOptions.Twilio.Number);
+                SendText(state.AnsweredPhoneNumber, appOptions.Twilio.Number);
+                state.SmsMessageSent = true;
               }
-
-              // what if no one answered?
-              // call again?
-              // or nothing?
             }
           }
         }
         else
         {
+          // We only need to reset once, but doing it each time won't hurt
+          state.Reset();
           await TurnCamerasOff(homeFoyer);
           // continue to ack events so they don't pile up
-          bool personEvent = await deviceAccess.CheckForPersonEventAsync(true);
+          await deviceAccess.CheckForPersonEventAsync(true);
+          await Task.Delay(fifteenMinutes);
         }
       }
     }
@@ -94,24 +100,21 @@ namespace nestalarm
       return ((now >= start) && (now <= midnight)) || ((now >= midnight2) && (now <= end));
     }
 
-    private static async Task ShouldRestart(string messageSid)
+    private static bool ShouldRestart()
     {
-      var messages = MessageResource.Read(limit: 20);
-      // find message by SID.
-      // and see if there's one right after it with test "RESTART"
-      Console.WriteLine(messages);
-      await Task.Delay(5000);
+      var messages = MessageResource.Read(limit: 1);
+      var message = messages.FirstOrDefault();
+      Logger.Info(message?.ToString());
+      return (message != null && message.Body == "RESTART");
     }
 
-    private static string SendText(string toPhone, string fromPhone)
+    private static void SendText(string toPhone, string fromPhone)
     {
-      var message = MessageResource.Create(
+      MessageResource.Create(
           body: "The Nest Alarm system is paused. To restart, reply RESTART.",
           from: new Twilio.Types.PhoneNumber(fromPhone),
           to: new Twilio.Types.PhoneNumber(toPhone)
       );
-
-      return message.Sid;
     }
 
     // Calls a list of phone numbers in order and returns the phone number that a human answered, if a human answers.
