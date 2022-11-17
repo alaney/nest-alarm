@@ -26,11 +26,6 @@ namespace nestalarm
 
   public class DeviceAccessOptions
   {
-    public string DeviceAccessProjectId { get; set; } = String.Empty;
-    public string OAuthClientId { get; set; } = String.Empty;
-    public string OAuthClientSecret { get; set; } = String.Empty;
-    public string AccessToken { get; set; } = String.Empty;
-    public string RefreshToken { get; set; } = String.Empty;
     public string SubscriptionId { get; set; } = String.Empty;
     public string ProjectId { get; set; } = String.Empty;
   }

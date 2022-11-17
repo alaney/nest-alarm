@@ -20,12 +20,11 @@ namespace nestalarm
 
       GoogleHomeFoyer homeFoyer = new GoogleHomeFoyer(appOptions.HomeFoyerRequestHeaders, appOptions.HomeFoyerCameras);
       DeviceAccess deviceAccess = new DeviceAccess(appOptions.DeviceAccess);
-      await deviceAccess.Authenticate();
       // Clear any events
       await deviceAccess.CheckForPersonEventAsync(true);
 
-      TimeSpan start = new TimeSpan(10, 0, 0);
-      TimeSpan end = new TimeSpan(9, 59, 59);
+      TimeSpan start = new TimeSpan(11, 0, 0);
+      TimeSpan end = new TimeSpan(10, 30, 0);
       TimeSpan fiveMinutes = new TimeSpan(0, 5, 0);
       TimeSpan fifteenMinutes = new TimeSpan(0, 15, 0);
 
@@ -73,6 +72,7 @@ namespace nestalarm
           {
             Logger.Info("Within time range. Turning cameras off.");
             await TurnCamerasOff(homeFoyer);
+            state.CamerasOn = false;
           }
           // no reason to loop often outside time range
           await Task.Delay(fifteenMinutes);
@@ -107,7 +107,7 @@ namespace nestalarm
       var messages = MessageResource.Read(limit: 1);
       var message = messages.FirstOrDefault();
       Logger.Info(message?.ToString());
-      return (message != null && message.Body == "RESTART");
+      return (message != null && message.Body.ToUpper() == "RESTART");
     }
 
     private static void SendText(string toPhone, string fromPhone)
@@ -143,7 +143,7 @@ namespace nestalarm
             {
               return phone;
             }
-            else if (callCompleted)
+            else if (callCompleted && call.AnsweredBy != "")
             {
               break;
             }

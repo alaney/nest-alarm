@@ -30,9 +30,6 @@ namespace nestalarm
 
       set
       {
-        _answeredPhoneNumber = "";
-        _smsMessageSent = false;
-        _phoneAnswered = false;
         _camerasOn = value;
       }
     }
