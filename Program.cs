@@ -31,42 +31,50 @@ namespace nestalarm
 
       while (true)
       {
-        // and the phone has not been answered
+        // takes 5 seconds
+        bool personEvent = await deviceAccess.CheckForPersonEventAsync(true);
+
         if (WithinTimeRange(start, end))
         {
-          await TurnCamerasOn(homeFoyer);
+          if (!state.CamerasOn)
+          {
+            Logger.Info("Within time range. Turning cameras on.");
+            await TurnCamerasOn(homeFoyer);
+            state.Reset();
+          }
 
           // an event occurred and someone answered the phone
           if (state.PhoneAnswered && state.SmsMessageSent)
           {
+            await Task.Delay(fiveMinutes);
+            Logger.Info("Checking text response");
             if (ShouldRestart())
             {
+              Logger.Info("Received RESTART text.");
               state.Reset();
             }
-            await Task.Delay(fiveMinutes);
           }
-          else
+          else if (personEvent)
           {
-            if (await deviceAccess.CheckForPersonEventAsync(true))
-            {
-              Logger.Info("Person event occurred");
-              state.AnsweredPhoneNumber = await CallPhones(appOptions.Phones, appOptions.Twilio);
+            Logger.Info("Person event occurred");
+            state.AnsweredPhoneNumber = await CallPhones(appOptions.Phones, appOptions.Twilio);
 
-              if (state.PhoneAnswered)
-              {
-                SendText(state.AnsweredPhoneNumber, appOptions.Twilio.Number);
-                state.SmsMessageSent = true;
-              }
+            if (state.PhoneAnswered)
+            {
+              Logger.Info("Sending text");
+              SendText(state.AnsweredPhoneNumber, appOptions.Twilio.Number);
+              state.SmsMessageSent = true;
             }
           }
         }
         else
         {
-          // We only need to reset once, but doing it each time won't hurt
-          state.Reset();
-          await TurnCamerasOff(homeFoyer);
-          // continue to ack events so they don't pile up
-          await deviceAccess.CheckForPersonEventAsync(true);
+          if (state.CamerasOn)
+          {
+            Logger.Info("Within time range. Turning cameras off.");
+            await TurnCamerasOff(homeFoyer);
+          }
+          // no reason to loop often outside time range
           await Task.Delay(fifteenMinutes);
         }
       }
@@ -74,20 +82,14 @@ namespace nestalarm
 
     private static async Task TurnCamerasOn(GoogleHomeFoyer homeFoyer)
     {
-      if (!state.CamerasOn)
-      {
-        await homeFoyer.TurnOnAllCameras();
-        state.CamerasOn = true;
-      }
+      await homeFoyer.TurnOnAllCameras();
+      state.CamerasOn = true;
     }
 
     private static async Task TurnCamerasOff(GoogleHomeFoyer homeFoyer)
     {
-      if (state.CamerasOn)
-      {
-        await homeFoyer.TurnOffAllCameras();
-        state.CamerasOn = false;
-      }
+      await homeFoyer.TurnOffAllCameras();
+      state.CamerasOn = false;
     }
 
     private static bool WithinTimeRange(TimeSpan start, TimeSpan end)
