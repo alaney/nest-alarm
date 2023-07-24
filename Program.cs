@@ -17,78 +17,100 @@ namespace nestalarm
       var config = configuration.Build();
       var appOptions = new AppOptions();
       config.Bind(appOptions);
+      var twilioOptions = appOptions.Twilio;
 
+      TwilioClient.Init(twilioOptions.AccountSid, twilioOptions.AuthToken);
       GoogleHomeFoyer homeFoyer = new GoogleHomeFoyer(appOptions.HomeFoyerRequestHeaders, appOptions.HomeFoyerCameras);
       DeviceAccess deviceAccess = new DeviceAccess(appOptions.DeviceAccess);
       // Clear any events
       await deviceAccess.CheckForPersonEventAsync(true);
 
-      TimeSpan start = new TimeSpan(11, 0, 0);
-      TimeSpan end = new TimeSpan(10, 30, 0);
+      TimeSpan start = new TimeSpan(22, 0, 0);
+      TimeSpan end = new TimeSpan(5, 30, 0);
       TimeSpan fiveMinutes = new TimeSpan(0, 5, 0);
       TimeSpan fifteenMinutes = new TimeSpan(0, 15, 0);
-
-      while (true)
+      try
       {
-        // takes 5 seconds
-        bool personEvent = await deviceAccess.CheckForPersonEventAsync(true);
-
-        if (WithinTimeRange(start, end))
+        Logger.Info("App is starting");
+        SendText(appOptions.Phones[0], appOptions.Twilio.Number, "App is starting");
+        while (true)
         {
-          if (!state.CamerasOn)
-          {
-            Logger.Info("Within time range. Turning cameras on.");
-            await TurnCamerasOn(homeFoyer);
-            state.Reset();
-          }
+          // takes 5 seconds
+          bool personEvent = await deviceAccess.CheckForPersonEventAsync(true);
 
-          // an event occurred and someone answered the phone
-          if (state.PhoneAnswered && state.SmsMessageSent)
+          if (WithinTimeRange(start, end))
           {
-            await Task.Delay(fiveMinutes);
-            Logger.Info("Checking text response");
-            if (ShouldRestart())
+            if (!state.CamerasOn)
             {
-              Logger.Info("Received RESTART text.");
+              SendText(appOptions.Phones[0], appOptions.Twilio.Number, "Turning cameras on");
+              Logger.Info("Within time range. Turning cameras on.");
+              await TurnCamerasOn(homeFoyer, appOptions);
               state.Reset();
             }
-          }
-          else if (personEvent)
-          {
-            Logger.Info("Person event occurred");
-            state.AnsweredPhoneNumber = await CallPhones(appOptions.Phones, appOptions.Twilio);
 
-            if (state.PhoneAnswered)
+            // an event occurred and someone answered the phone
+            if (state.PhoneAnswered && state.SmsMessageSent)
             {
-              Logger.Info("Sending text");
-              SendText(state.AnsweredPhoneNumber, appOptions.Twilio.Number);
-              state.SmsMessageSent = true;
+              await Task.Delay(fiveMinutes);
+              Logger.Info("Checking text response");
+              if (ShouldRestart())
+              {
+                Logger.Info("Received RESTART text.");
+                await deviceAccess.CheckForPersonEventAsync(true);
+                state.Reset();
+              }
+            }
+            else if (personEvent)
+            {
+              Logger.Info("Person event occurred");
+              state.AnsweredPhoneNumber = await CallPhones(appOptions.Phones, twilioOptions);
+
+              if (state.PhoneAnswered)
+              {
+                Logger.Info("Sending text");
+                SendText(state.AnsweredPhoneNumber, appOptions.Twilio.Number, "The Nest Alarm system is paused. To restart, reply RESTART.");
+                state.SmsMessageSent = true;
+              }
             }
           }
-        }
-        else
-        {
-          if (state.CamerasOn)
+          else
           {
-            Logger.Info("Within time range. Turning cameras off.");
-            await TurnCamerasOff(homeFoyer);
-            state.CamerasOn = false;
+            if (state.CamerasOn)
+            {
+              SendText(appOptions.Phones[0], appOptions.Twilio.Number, "Turning cameras off");
+              Logger.Info("Within time range. Turning cameras off.");
+              await TurnCamerasOff(homeFoyer, appOptions);
+              state.CamerasOn = false;
+            }
+            // no reason to loop often outside time range
+            await Task.Delay(fifteenMinutes);
           }
-          // no reason to loop often outside time range
-          await Task.Delay(fifteenMinutes);
         }
+      }
+      catch (Exception ex)
+      {
+        Logger.Error(ex);
+        SendText(appOptions.Phones[0], appOptions.Twilio.Number, "An Exception occurred");
       }
     }
 
-    private static async Task TurnCamerasOn(GoogleHomeFoyer homeFoyer)
+    private static async Task TurnCamerasOn(GoogleHomeFoyer homeFoyer, AppOptions appOptions)
     {
-      await homeFoyer.TurnOnAllCameras();
+      var successful = await homeFoyer.TurnOnAllCameras();
+      if (!successful)
+      {
+        SendText(appOptions.Phones[0], appOptions.Twilio.Number, "Failed to turn on one or more camreas");
+      }
       state.CamerasOn = true;
     }
 
-    private static async Task TurnCamerasOff(GoogleHomeFoyer homeFoyer)
+    private static async Task TurnCamerasOff(GoogleHomeFoyer homeFoyer, AppOptions appOptions)
     {
-      await homeFoyer.TurnOffAllCameras();
+      var successful = await homeFoyer.TurnOffAllCameras();
+      if (!successful)
+      {
+        SendText(appOptions.Phones[0], appOptions.Twilio.Number, "Failed to turn off one or more camreas");
+      }
       state.CamerasOn = false;
     }
 
@@ -110,10 +132,10 @@ namespace nestalarm
       return (message != null && message.Body.ToUpper() == "RESTART");
     }
 
-    private static void SendText(string toPhone, string fromPhone)
+    private static void SendText(string toPhone, string fromPhone, string message)
     {
       MessageResource.Create(
-          body: "The Nest Alarm system is paused. To restart, reply RESTART.",
+          body: message,
           from: new Twilio.Types.PhoneNumber(fromPhone),
           to: new Twilio.Types.PhoneNumber(toPhone)
       );
@@ -123,7 +145,6 @@ namespace nestalarm
     // otherwise returns an empty string.
     private static async Task<string> CallPhones(string[] phones, TwilioOptions twilioOptions)
     {
-      TwilioClient.Init(twilioOptions.AccountSid, twilioOptions.AuthToken);
       for (int i = 0; i < phones.Length; i++)
       {
         string phone = phones[i];

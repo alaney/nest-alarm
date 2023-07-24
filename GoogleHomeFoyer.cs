@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 
 namespace nestalarm
@@ -18,34 +19,52 @@ namespace nestalarm
       this.cameras = cameras;
     }
 
-    public async Task TurnOnAllCameras()
+    public async Task<Boolean> TurnOnAllCameras()
     {
+      Boolean successful = true;
+
       for (int i = 0; i < cameras.Count; i++)
       {
         Camera cam = cameras[i];
-        await TurnOnCamera(cam);
+        var success = await TurnOnCamera(cam);
+        if (!success)
+        {
+          successful = false;
+        }
       }
+
+      return successful;
     }
 
-    public async Task TurnOffAllCameras()
+    public async Task<Boolean> TurnOffAllCameras()
     {
+      Boolean successful = true;
+
       for (int i = 0; i < cameras.Count; i++)
       {
         Camera cam = cameras[i];
-        await TurnOffCamera(cam);
+        var success = await TurnOffCamera(cam);
+        if (!success)
+        {
+          successful = false;
+        }
       }
+
+      return successful;
     }
 
-    private async Task TurnOffCamera(Camera camera)
+    private async Task<Boolean> TurnOffCamera(Camera camera)
     {
       string content = $"[[[[\"{camera.id}\",[\"nest-home-assistant-prod\",\"{camera.deviceId}\"]],[[\"onOff\",[[\"onOff\",[null,null,null,false]]]]]]]]";
-      await SendHomeFoyerRequest(content);
+      var response = await SendHomeFoyerRequest(content);
+      return response.StatusCode == HttpStatusCode.OK;
     }
 
-    private async Task TurnOnCamera(Camera camera)
+    private async Task<Boolean> TurnOnCamera(Camera camera)
     {
       string content = $"[[[[\"{camera.id}\",[\"nest-home-assistant-prod\",\"{camera.deviceId}\"]],[[\"onOff\",[[\"onOff\",[null,null,null,true]]]]]]]]";
-      await SendHomeFoyerRequest(content);
+      var response = await SendHomeFoyerRequest(content);
+      return response.StatusCode == HttpStatusCode.OK;
     }
 
     private async Task<HttpResponseMessage> SendHomeFoyerRequest(string content)
@@ -66,7 +85,6 @@ namespace nestalarm
           response = await client.SendAsync(request);
         }
       }
-      Console.WriteLine(response.StatusCode);
       return response;
     }
   }

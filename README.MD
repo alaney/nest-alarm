@@ -5,3 +5,5 @@ https://cloud.google.com/sdk/docs/install
 
 Then create a credential file
 https://cloud.google.com/docs/authentication/provide-credentials-adc#local-dev
+
+For this app to work with Task Scheduler
